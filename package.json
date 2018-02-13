@@ -9,6 +9,7 @@
     "coffeescript": "^2.0.0",
     "colors": "^1.1.2",
     "fs-extra-promise": "^1.0.1",
+    "lex": "^1.7.9",
     "lodash": "^4.17.4"
   }
 }

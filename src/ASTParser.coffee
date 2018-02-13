@@ -3,6 +3,7 @@ FALSE =
   value: false
 
 
+# 运算符优先级
 PRECEDENCE =
   "=":  1
   "||": 2
@@ -23,37 +24,37 @@ PRECEDENCE =
 module.exports = class ASTParser
 
 
-  constructor: (input) ->
-    @input = input
+  constructor: (tokenStream) ->
+    @tokenStream = tokenStream
 
 
-  parse: ->
+  parse: =>
     return @parse_toplevel()
 
 
-  # 是标点符号
-  is_punc: (ch) ->
-    tok = @input.peek()
-    if tok
-      if tok.type is "punc"
-        if !ch or tok.value is ch
-          return tok
+  # 记号是不是某种「标点」
+  isPunc: (punc) =>
+    token = @tokenStream.peek()
+    if token
+      if token.type is "punc"
+        if !punc or token.value is punc
+          return token
     return false
 
 
-  # 是关键词
-  is_kw: (kw) ->
-    tok = @input.peek()
+  # 记号是不是某种「关键词」
+  isKeyword: (keyword) =>
+    tok = @tokenStream.peek()
     if tok
-      if tok.type is "kw"
-        if !kw or tok.value is kw
+      if tok.type is "keyword"
+        if !keyword or tok.value is keyword
           return tok
     return false
 
 
   # 是操作符
-  is_op: (op) ->
-    tok = @input.peek()
+  is_op: (op) =>
+    tok = @tokenStream.peek()
     if tok
       if tok.type is "op"
         if !op or tok.value is op
@@ -61,39 +62,39 @@ module.exports = class ASTParser
     return false
 
 
-  skip_punc: (ch) ->
-    if @is_punc(ch)
-      @input.next()
+  skip_punc: (ch) =>
+    if @isPunc(ch)
+      @tokenStream.next()
     else
-      @input.throw("Expecting punctuation: \"" + ch + "\"")
+      @tokenStream.throw("Expecting punctuation: \"" + ch + "\"")
 
 
-  skip_kw: (kw) ->
-    if @is_kw(kw)
-      @input.next()
+  skip_kw: (kw) =>
+    if @isKeyword(kw)
+      @tokenStream.next()
     else
-      @input.throw("Expecting keyword: \"" + kw + "\"")
+      @tokenStream.throw("Expecting keyword: \"" + kw + "\"")
 
 
-  skip_op: (op) ->
+  skip_op: (op) =>
     if @is_op(op)
-      @input.next()
+      @tokenStream.next()
     else
-      @input.throw("Expecting operator: \"" + op + "\"")
+      @tokenStream.throw("Expecting operator: \"" + op + "\"")
 
 
-  unexpected: ->
-    @input.throw("Unexpected token: " + JSON.stringify(@input.peek()))
+  unexpected: =>
+    @tokenStream.throw("Unexpected token: " + JSON.stringify(@tokenStream.peek()))
 
 
-  maybe_binary: (left, my_prec) ->
+  maybe_binary: (left, my_prec) =>
     tok = @is_op()
 
     if tok
       his_prec = PRECEDENCE[tok.value]
 
       if his_prec > my_prec
-        @input.next()
+        @tokenStream.next()
 
         return @maybe_binary({
           type: if tok.value is "=" then "assign" else "binary"
@@ -105,15 +106,15 @@ module.exports = class ASTParser
     return left
 
 
-  delimited: (start, stop, separator, parser) ->
+  delimited: (start, stop, separator, parser) =>
     a = []
     first = true
 
     @skip_punc(start)
 
-    while !@input.eof()
+    while !@tokenStream.eof()
 
-      if @is_punc(stop)
+      if @isPunc(stop)
         break
 
       if first
@@ -121,7 +122,7 @@ module.exports = class ASTParser
       else
         @skip_punc(separator)
 
-      if @is_punc(stop)
+      if @isPunc(stop)
         break
 
       a.push(parser())
@@ -130,7 +131,7 @@ module.exports = class ASTParser
     return a
 
 
-  parse_call: (func) ->
+  parse_call: (func) =>
     return{
       type: "call"
       func: func
@@ -138,19 +139,19 @@ module.exports = class ASTParser
     }
 
 
-  parse_varname: ->
-    name = @input.next()
+  parse_varname: =>
+    name = @tokenStream.next()
     if name.type isnt "var"
-      @input.throw("Expecting variable name")
+      @tokenStream.throw("Expecting variable name")
     return name.value
 
 
-  parse_if: ->
+  parse_if: =>
     @skip_kw("if")
 
     cond = @parse_expression()
 
-    if !@is_punc("{")
+    if !@isPunc("{")
       @skip_kw("then")
 
     _then = @parse_expression()
@@ -161,56 +162,55 @@ module.exports = class ASTParser
       then: _then
     }
 
-    if @is_kw("else")
-      @input.next()
+    if @isKeyword("else")
+      @tokenStream.next()
       ret.else = @parse_expression()
 
     return ret
 
 
-  parse_lambda: ->
-    return{
+  parse_lambda: =>
+    return
       type: "lambda"
       vars: @delimited("(", ")", ",", @parse_varname.bind(this))
       body: @parse_expression()
-    }
 
 
-  parse_bool: ->
+  parse_bool: =>
     return{
       type: "bool"
-      value: @input.next().value is "true"
+      value: @tokenStream.next().value is "true"
     }
 
 
-  maybe_call: (expr) ->
+  maybe_call: (expr) =>
     expr = expr()
-    return if @is_punc("(") then @parse_call(expr) else expr
+    return if @isPunc("(") then @parse_call(expr) else expr
 
 
-  parse_atom: ->
-    return @maybe_call (()->
+  parse_atom: =>
+    return @maybe_call (()=>
 
-      if @is_punc("(")
-        @input.next()
+      if @isPunc("(")
+        @tokenStream.next()
         exp = @parse_expression()
         @skip_punc(")")
         return exp
 
-      if @is_punc("{")
+      if @isPunc("{")
         return @parse_prog()
 
-      if @is_kw("if")
+      if @isKeyword("if")
         return @parse_if()
 
-      if @is_kw("true") or @is_kw("false")
+      if @isKeyword("true") or @isKeyword("false")
         return @parse_bool()
 
-      if @is_kw("lambda") or @is_kw("λ")
-        @input.next()
+      if @isKeyword("lambda") or @isKeyword("λ")
+        @tokenStream.next()
         return @parse_lambda()
 
-      tok = @input.next()
+      tok = @tokenStream.next()
       if tok.type is "var" or tok.type is "num" or tok.type is "str"
         return tok
 
@@ -219,13 +219,13 @@ module.exports = class ASTParser
   ).bind(@)
 
 
-  parse_toplevel: ->
+  parse_toplevel: =>
     prog = []
 
-    while !@input.eof()
+    while !@tokenStream.eof()
       prog.push(@parse_expression())
 
-      if !@input.eof()
+      if !@tokenStream.eof()
         @skip_punc(";")
 
     return{
@@ -234,7 +234,7 @@ module.exports = class ASTParser
     }
 
 
-  parse_prog: ->
+  parse_prog: =>
     prog = @delimited("{", "}", ";", @parse_expression.bind(@))
 
     if(prog.length is 0)
@@ -249,7 +249,7 @@ module.exports = class ASTParser
     }
 
 
-  parse_expression: ->
-    return @maybe_call (->
+  parse_expression: =>
+    return @maybe_call (=>
       return @maybe_binary(@parse_atom(), 0)
     ).bind(@)

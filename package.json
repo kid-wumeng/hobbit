@@ -1,0 +1,14 @@
+{
+  "name": "hobbit",
+  "version": "0.1.0",
+  "scripts": {
+    "start": "node index",
+    "dev": "node index dev"
+  },
+  "dependencies": {
+    "coffeescript": "^2.0.0",
+    "colors": "^1.1.2",
+    "fs-extra-promise": "^1.0.1",
+    "lodash": "^4.17.4"
+  }
+}
